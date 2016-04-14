@@ -1,0 +1,218 @@
+<html>
+<head>
+<meta charset="utf8">
+<script src="jquery-1.12.3.min.js"></script>
+</head>
+<body>
+<p>
+    <input type="text" id="server_text" value=""/>
+    <input type="button" id="connect_button" value="Подключиться">
+    <input type="button" id="disconnect_button" value="Отключиться", disabled="">
+</p>
+<div id="pannel" style="display:none">
+<p>
+    <input type="text" id="login_text" value="" placeholder="login"/>
+    <input type="button" id="login_button" value="Вход">
+</p>
+<p>
+     Подключенные пользователи: <span id="users_text" readonly></span>
+</p>
+<h2>Чат</h2>
+<p><textarea cols="200" rows="10" id="chat_room"></textarea></p>
+<p>
+    <input type="text" id="chat_text">
+    <input type="button" id="chat_button" value="Отправить"></p>
+</p>
+<h2>Блокировка</h2>
+<p>
+<input type="text" id="field1" class="field" disabled="" style="width: 400px">
+<span id="field1_user"></span>
+</p>
+<p>
+<input type="text" id="field2" class="field" disabled="" style="width: 400px">
+<span id="field2_user"></span>
+</p>
+<p>
+<input type="text" id="field3" class="field" disabled="" style="width: 400px">
+<span id="field3_user"></span>
+</p>
+<p>
+<input type="text" id="field4" class="field" disabled="" style="width: 400px">
+<span id="field4_user"></span>
+</p>
+<p>
+<input type="text" id="field5" class="field" disabled="" style="width: 400px">
+<span id="field5_user"></span>
+</p>
+<div id="fields_container">
+</div>
+</div>
+
+<script>
+function init(){ 
+    var socket;
+    var LOGIN;
+    var list_users_timer;
+    var host = window.location.host;
+    host = host ? host : 'localhost';
+    var server_text = $('#server_text');
+    server_text.val("ws://"+host+":8888/test/");
+    var login_text = $('#login_text');
+
+    var connect_button = $('#connect_button');
+    var disconnect_button = $('#disconnect_button');
+    var pannel = $('#pannel');
+    var users_text = $('#users_text') 
+
+    var chat_text = $('#chat_text');
+    var chat_button = $('#chat_button');
+    var chat_room = $('#chat_room');
+    var fields = {}
+
+    function chat_add_message(message){ 
+        chat_room.val(message + '\n' + chat_room.val())
+    }
+    function block_field(id, user){
+        var field = $('#'+id);
+        var block_field = $('#'+id+'_user');
+        block_field.text(user) 
+        if (user!=LOGIN){
+            field.attr('disabled', true);
+        }
+    }
+    function unblock_field(id, user){
+        var field = $('#'+id);
+        var block_field = $('#'+id+'_user');
+        block_field.text('')
+        field.attr('disabled', false);
+    }
+    function set_field_value(id, value){
+        var field = $('#'+id);
+        field.val(value);
+    }
+
+
+    function connect(url){
+        socket = new WebSocket(url);
+
+        socket.onopen = function() {
+          console.log("Connected");
+          disconnect_button.attr('disabled', false);
+          pannel.show();
+          /*list_users_timer = setInterval(function(){
+            send('auth.list_users')
+          }, 2000);
+          */
+          send('fields.list')
+        };
+
+        socket.onclose = function(event) {
+          if (event.wasClean) {
+            console.log('disconnected')
+          } else {
+            console.log('disconnected with error')
+          }
+          console.log('code:' + event.code + ', reason:' + event.reason)
+          alert(event.reason);
+          disconnect_button.attr('disabled', true);
+          connect_button.attr('disabled', false);
+          pannel.hide();
+          if(list_users_timer) clearInterval(list_users_timer);
+        };
+
+        socket.onmessage = function(event) {
+          console.log('resp:', event.data)
+          var data = JSON.parse(event.data);
+          if(data.name=='error'){
+              console.log(data.body.reason);
+              alert(data.body.reason);
+              return;
+          }
+
+          if(data.name=='auth.login'){
+              LOGIN = data.body.user;
+          }
+          if(data.name=='auth.login_notification'){
+              user = data.body.user;
+              chat_add_message('User ' + user + ' login')
+          }
+
+          if(data.name=='auth.list_users'){
+              users_text.text(data.body.users.join(', '))
+          }
+          if(data.name=='chat.send_notification'){
+              chat_add_message(data.body.user + ': ' + data.body.message);
+          }
+          if(data.name=='fields.list'){
+              $.each(data.body.fields, function(index, field){
+                  set_field_value(field.name, field.value);
+                  if(field.block){
+                      block_field(field.name, field.block)
+                  }else{
+                      unblock_field(field.name, field.block)
+                  }
+              });
+          }
+          if(data.name=='fields.block_notification'){
+              block_field(data.body.name, data.body.user)
+          }
+          if(data.name=='fields.unblock_notification'){
+              unblock_field(data.body.name, data.body.user)
+          }
+          if(data.name=='fields.change_notification'){
+              if(data.body.user!=LOGIN){
+                  set_field_value(data.body.name,  data.body.value)
+              }
+          }
+        };
+
+        socket.onerror = function(error) {
+          alert("Ошибка " + error.message);
+        };
+        connect_button.attr('disabled', true);
+    };
+    function send(name, body){
+        var message = {
+            name: name,
+            body: body,
+        }
+        var raw_message = JSON.stringify(message)
+        console.log('send:', raw_message)
+        socket.send(raw_message)
+    }
+
+    connect_button.click(function(e){
+        connect(server_text.val());
+    });
+    $('#disconnect_button').click(function(e){
+        socket.close();
+    });
+    $('#login_button').click(function(e){
+        send('auth.login', {'user': login_text.val()})
+    });
+    $('#chat_button').click(function(e){
+        send('chat.send', {'message': chat_text.val()})
+    });
+    $('.field').focus(function(e){
+        var field = $(e.target);
+        send('fields.block', {name: field.attr('id')})
+    });
+    $('.field').focusout(function(e){
+        var field = $(e.target);
+        //send('field.store', {name: field.attr('id'), value: field.val()})
+        send('fields.unblock', {name: field.attr('id')})
+    });
+    $('.field').on('input propertychange', function(e){
+        var field = $(e.target);
+        send('fields.change', {
+            name: field.attr('id'),
+            user: LOGIN,
+            value: field.val(),
+        })
+    });
+}
+init();
+</script>
+
+</body>
+</html>
