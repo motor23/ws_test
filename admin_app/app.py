@@ -3,7 +3,6 @@ import json
 
 from .exc import BaseError, MessageError
 from .environment import Environment
-from .client_context import ClientContext
 from . import messages
 
 logger = logging.getLogger(__name__)
