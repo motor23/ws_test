@@ -17,6 +17,7 @@
 <p>
      Подключенные пользователи: <span id="users_text" readonly></span>
 </p>
+<div id="pannel2" style="display:none">
 <h2>Чат</h2>
 <p><textarea cols="200" rows="10" id="chat_room"></textarea></p>
 <p>
@@ -47,13 +48,14 @@
 <div id="fields_container">
 </div>
 </div>
+</div>
 
 <script>
 function init(){ 
     var socket;
     var LOGIN;
     var list_users_timer;
-    var host = window.location.host;
+    var host = window.location.hostname;
     host = host ? host : 'localhost';
     var server_text = $('#server_text');
     server_text.val("ws://"+host+":8888/test/");
@@ -99,10 +101,9 @@ function init(){
           console.log("Connected");
           disconnect_button.attr('disabled', false);
           pannel.show();
-          /*list_users_timer = setInterval(function(){
+          list_users_timer = setInterval(function(){
             send('auth.list_users')
           }, 2000);
-          */
           send('fields.list')
         };
 
@@ -131,6 +132,7 @@ function init(){
 
           if(data.name=='auth.login'){
               LOGIN = data.body.user;
+              $('#pannel2').show();
           }
           if(data.name=='auth.login_notification'){
               user = data.body.user;
